@@ -16,37 +16,37 @@ The interface will go through revision as other cloud providers are added.
 
 ```go
 import (
-    "context"
-    "fmt"
+	"context"
+	"fmt"
 
-    "github.com/jimsnab/go-lane"
-    "github.com/jimsnab/vault-token-go"
+	"github.com/jimsnab/go-lane"
+	"github.com/jimsnab/vault-token-go"
 )
 
 func main() {
-    d := mydata{}
+	d := mydata{}
 
-    // get config from your method of choice
-    uri := os.Getenv("VAULT_URI")
-    caCert := os.Getenv("VAULT_CA_CERT")        // optional - the server CA cert file
-    caPath := os.Getenv("VAULT_CA_PATH")        // optional - a directory of CA certs - use caCert or caPath, not both
-    token := os.Getenv("VAULT_TOKEN")           // empty string for cloud hosting; a Vault-issued auth token for local development/testing
+	// get config from your method of choice
+	uri := os.Getenv("VAULT_URI")
+	caCert := os.Getenv("VAULT_CA_CERT")        // optional - the server CA cert file
+	caPath := os.Getenv("VAULT_CA_PATH")        // optional - a directory of CA certs - use caCert or caPath, not both
+	token := os.Getenv("VAULT_TOKEN")           // empty string for cloud hosting; a Vault-issued auth token for local development/testing
 
-    appName := os.Getenv("APP_NAME")
+	appName := os.Getenv("APP_NAME")
 
-    l := lane.NewLogLane(context.Background())  // provide your choice of log lane
+	l := lane.NewLogLane(context.Background())  // provide your choice of log lane
 
-    vaultRole := fmt.Sprintf("%s-app-role", appName)        // find vaultRole from the server, ex: vault list auth/gcp/roles
+	vaultRole := fmt.Sprintf("%s-app-role", appName)        // find vaultRole from the server, ex: vault list auth/gcp/roles
 
-    // keep the client around long term
-    vcc, err := NewVaultClient(l, d.uri, d.caCert, d.token, vaultRole)
-    if err != nil {
-        l.Fatal(err)
-    }
+	// keep the client around long term
+	vcc, err := NewVaultClient(l, d.uri, d.caCert, d.token, vaultRole)
+	if err != nil {
+		l.Fatal(err)
+	}
 
-    // get the API interface when a fresh token is needed; the frequency
-    // depends on Vault server token expiration settings
-    vc, err := vcc.GetApiInterface(l)
+	// get the API interface when a fresh token is needed; the frequency
+	// depends on Vault server token expiration settings
+	vc, err := vcc.GetApiInterface(l)
 	if err != nil {
 		l.Fatal(err)
 	}
@@ -57,14 +57,14 @@ func main() {
 		if !strings.Contains(err.Error(), "secret not found") {
 			l.Fatal(err)
 		}
-        fmt.Println("my-secret doesn't exist in Vault under my-kv-v2-engine")
+		fmt.Println("my-secret doesn't exist in Vault under my-kv-v2-engine")
 	} else {
 		password, exists = secret.Data["password"].(string)
-        if exists {
-            fmt.Println("password: ", password)
-        } else {
-            fmt.Println("password not set in Vault")
-        }
+		if exists {
+			fmt.Println("password: ", password)
+		} else {
+			fmt.Println("password not set in Vault")
+		}
 	}
 }
 ```
