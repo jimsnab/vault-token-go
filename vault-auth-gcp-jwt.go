@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -179,7 +178,7 @@ func (jwt *gcpAuthJwt) getDefaultSaEmail(l lane.Lane) (saEmail string, err error
 	}
 
 	l.Tracef("vault-auth-gcp: default sa email is %s", saEmail)
-	l.Tracef("vault-auth-gcp: ensure your workload is running in the intended kubernetes service account context")
+	l.Warnf("vault-auth-gcp: ensure your workload is running in the intended kubernetes service account context; check the deployment resource serviceAccountName setting")
 	return
 }
 
