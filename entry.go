@@ -40,8 +40,8 @@ func NewVaultClient(l lane.Lane, uri, caCert, caPath, vaultToken, vaultRole stri
 	vcfg.Address = uri
 
 	tlsConfig := vaultapi.TLSConfig{
-		CACert: caCert,	// server ca pem file path
-		CAPath: caPath,	// server ca pem(s) dir path
+		CACert: caCert, // server ca pem file path
+		CAPath: caPath, // server ca pem(s) dir path
 	}
 	vcfg.ConfigureTLS(&tlsConfig)
 

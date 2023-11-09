@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	"github.com/cenkalti/backoff/v3"
 	"github.com/jimsnab/go-lane"
 	"github.com/pkg/errors"
@@ -24,11 +25,11 @@ type (
 )
 
 const (
-	cJwtTokenTimeoutMins      = 1 // corresponds to Vault policy
-	cJwtClientIdleTimeoutSecs = 1
-	cGcpAuthUrl               = "https://www.googleapis.com/auth/cloud-platform"
-	cGcpMetadataUrl           = "http://metadata.google.internal/computeMetadata/v1"
-	cGcpIamCredentialsUrl     = "https://iamcredentials.googleapis.com/v1"
+	kJwtTokenTimeoutMins      = 1 // corresponds to Vault policy
+	kJwtClientIdleTimeoutSecs = 1
+	kGcpAuthUrl               = "https://www.googleapis.com/auth/cloud-platform"
+	kGcpMetadataUrl           = "http://metadata.google.internal/computeMetadata/v1"
+	kGcpIamCredentialsUrl     = "https://iamcredentials.googleapis.com/v1"
 )
 
 // newGcpAuthJwt creates a structure that wraps a Google Service Account (gsa)
@@ -84,7 +85,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	claim, err = json.Marshal(map[string]interface{}{
 		"aud": "vault/" + jwt.cfg.role,
 		"sub": saEmail,
-		"exp": time.Now().UTC().Add(cJwtTokenTimeoutMins * time.Minute).Unix(),
+		"exp": time.Now().UTC().Add(kJwtTokenTimeoutMins * time.Minute).Unix(),
 	})
 	if err != nil {
 		err = errors.Wrap(err, "inner jwt marshalling error")
@@ -101,7 +102,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	}
 
 	reqBody := []byte(`{"payload":` + string(payload) + "}")
-	url := fmt.Sprintf("%s/projects/-/serviceAccounts/%s:signJwt", cGcpIamCredentialsUrl, url.PathEscape(saEmail))
+	url := fmt.Sprintf("%s/projects/-/serviceAccounts/%s:signJwt", kGcpIamCredentialsUrl, url.PathEscape(saEmail))
 
 	l.Tracef("request url: %s", url)
 	l.Tracef("request body: %s", string(reqBody))
@@ -146,8 +147,10 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 // If that mechanism isn't set up properly, the code here will fall back to
 // the default gsa.
 func (jwt *gcpAuthJwt) getSaInfo(l lane.Lane) (saEmail string, tokenSrc oauth2.TokenSource, err error) {
+	l.Tracef("vault-auth-gcp: requesting GCP default credentials at %s", kGcpAuthUrl)
+
 	var creds *google.Credentials
-	if creds, err = google.FindDefaultCredentials(l, cGcpAuthUrl); err != nil {
+	if creds, err = google.FindDefaultCredentials(l, kGcpAuthUrl); err != nil {
 		err = errors.Wrap(err, "unable to find default google credentials for service account")
 		return
 	}
@@ -169,41 +172,15 @@ func (jwt *gcpAuthJwt) getSaInfo(l lane.Lane) (saEmail string, tokenSrc oauth2.T
 
 // see https://cloud.google.com/compute/docs/metadata/overview
 func (jwt *gcpAuthJwt) getDefaultSaEmail(l lane.Lane) (saEmail string, err error) {
-	c := jwt.getHttpClient(l)
-
-	var req *http.Request
-	req, err = http.NewRequest(http.MethodGet, cGcpMetadataUrl+"/instance/service-accounts/default/email", nil)
+	saEmail, err = metadata.Email("")
 	if err != nil {
-		err = errors.Wrap(err, "unable create metadata request")
-		return
-	}
-	req.Header.Add("Metadata-Flavor", "Google")
-
-	var resp *http.Response
-	if resp, err = c.Do(req); err != nil {
-		err = errors.Wrap(err, "error connecting to metadata server")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		err = errors.Errorf("unexpected status response from metadata service: %d", resp.StatusCode)
+		l.Tracef("vault-auth-gcp: can't get default sa email: %v", err)
 		return
 	}
 
-	var body []byte
-	if body, err = io.ReadAll(resp.Body); err != nil {
-		err = errors.Wrap(err, "unable to read metadata response")
-		return
-	}
-
-	result := strings.TrimSpace(string(body))
-	if result == "" {
-		err = errors.New("unexpected empty response from metadata service")
-		return
-	}
-
-	return result, nil
+	l.Tracef("vault-auth-gcp: default sa email is %s", saEmail)
+	l.Tracef("vault-auth-gcp: ensure your workload is running in the intended kubernetes service account context")
+	return
 }
 
 // worker that pulls out client e-mail address from credentials provided by
@@ -219,14 +196,21 @@ func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) 
 		email = data["client_email"]
 		if email == "" {
 			l.Debug("vault-auth-gcp: client_email is empty")
-			l.Debugf("vault-auth-gcp: gcp credentials: %v", creds)
+			jwt.logCredentials(l, creds)
 		}
 	} else {
 		l.Debug("vault-auth-gcp: creds.JSON is empty")
-		l.Debugf("vault-auth-gcp: gcp credentials: %v", creds)
+		jwt.logCredentials(l, creds)
 	}
 
 	return
+}
+
+func (jwt *gcpAuthJwt) logCredentials(l lane.Lane, creds *google.Credentials) {
+	details, err := json.MarshalIndent(creds, "", "  ")
+	if err == nil {
+		l.Debugf("vault-auth-gcp: gcp credentials: %s", string(details))
+	}
 }
 
 // Creates an http client for REST requests, with test hook possibility
@@ -237,7 +221,7 @@ func (jwt *gcpAuthJwt) getHttpClient(l lane.Lane) *http.Client {
 	}
 	return &http.Client{
 		Transport: &http.Transport{
-			IdleConnTimeout: cJwtClientIdleTimeoutSecs * time.Second,
+			IdleConnTimeout: kJwtClientIdleTimeoutSecs * time.Second,
 		},
 	}
 }
