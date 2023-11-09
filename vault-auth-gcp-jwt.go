@@ -218,11 +218,12 @@ func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) 
 
 		email = data["client_email"]
 		if email == "" {
-			l.Tracef("vault-auth-gcp: client_email is empty")
-			l.Tracef("vault-auth-gcp: gcp credentials: %v", creds)
+			l.Debug("vault-auth-gcp: client_email is empty")
+			l.Debugf("vault-auth-gcp: gcp credentials: %v", creds)
 		}
 	} else {
-		l.Tracef("vault-auth-gcp: creds.JSON is empty")
+		l.Debug("vault-auth-gcp: creds.JSON is empty")
+		l.Debugf("vault-auth-gcp: gcp credentials: %v", creds)
 	}
 
 	return
