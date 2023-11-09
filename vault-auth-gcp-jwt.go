@@ -152,7 +152,7 @@ func (jwt *gcpAuthJwt) getSaInfo(l lane.Lane) (saEmail string, tokenSrc oauth2.T
 		return
 	}
 
-	if saEmail, err = jwt.parseCredentials(creds); err != nil {
+	if saEmail, err = jwt.parseCredentials(l, creds); err != nil {
 		err = errors.Wrap(err, "unable to get client e-mail from default google credentials")
 		return
 	}
@@ -208,7 +208,7 @@ func (jwt *gcpAuthJwt) getDefaultSaEmail(l lane.Lane) (saEmail string, err error
 
 // worker that pulls out client e-mail address from credentials provided by
 // the Google client SDK
-func (jwt *gcpAuthJwt) parseCredentials(creds *google.Credentials) (email string, err error) {
+func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) (email string, err error) {
 	if len(creds.JSON) > 0 {
 		var data map[string]string
 		if err = json.Unmarshal(creds.JSON, &data); err != nil {
@@ -217,6 +217,12 @@ func (jwt *gcpAuthJwt) parseCredentials(creds *google.Credentials) (email string
 		}
 
 		email = data["client_email"]
+		if email == "" {
+			l.Tracef("vault-auth-gcp: client_email is empty")
+			l.Tracef("vault-auth-gcp: gcp credentials: %v", creds)
+		}
+	} else {
+		l.Tracef("vault-auth-gcp: creds.JSON is empty")
 	}
 
 	return
