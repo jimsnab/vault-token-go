@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -178,7 +179,9 @@ func (jwt *gcpAuthJwt) getDefaultSaEmail(l lane.Lane) (saEmail string, err error
 	}
 
 	l.Tracef("vault-auth-gcp: default sa email is %s", saEmail)
-	l.Warnf("vault-auth-gcp: ensure your workload is running in the intended kubernetes service account context; check the deployment resource serviceAccountName setting")
+	if !strings.Contains(saEmail, "@") {
+		l.Warnf("vault-auth-gcp: ensure your workload is running in the intended kubernetes service account context; check the deployment resource serviceAccountName setting")
+	}
 	return
 }
 
@@ -195,21 +198,12 @@ func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) 
 		email = data["client_email"]
 		if email == "" {
 			l.Debug("vault-auth-gcp: client_email is empty")
-			jwt.logCredentials(l, creds)
 		}
 	} else {
 		l.Debug("vault-auth-gcp: creds.JSON is empty")
-		jwt.logCredentials(l, creds)
 	}
 
 	return
-}
-
-func (jwt *gcpAuthJwt) logCredentials(l lane.Lane, creds *google.Credentials) {
-	details, err := json.MarshalIndent(creds, "", "  ")
-	if err == nil {
-		l.Debugf("vault-auth-gcp: gcp credentials: %s", string(details))
-	}
 }
 
 // Creates an http client for REST requests, with test hook possibility
