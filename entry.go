@@ -13,15 +13,6 @@ type (
 	}
 )
 
-const (
-	cAuthTypeAnnotationKey      = "raven.nabancard.com/auth-type"
-	cAuthTypeGcpAnnotationValue = "gcp"
-	cInfraAnnotationKey         = "raven.nabancard.com/infra"
-	cVaultCaCertAnnotationKey   = "raven.nabancard.com/vault-ca-cert"
-	cVaultCaPathAnnotationKey   = "raven.nabancard.com/vault-ca-path"
-	cVaultUrlAnnotationKey      = "raven.nabancard.com/vault-url"
-)
-
 // Makes a new Vault client. This is a setup operation, preparing the auth,
 // but not connecting to Vault server except for possibly getting a JWT.
 //

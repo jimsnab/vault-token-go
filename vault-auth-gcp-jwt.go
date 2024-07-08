@@ -72,7 +72,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	}
 
 	// derive an http client that has the gsa token source
-	defaultClient := jwt.getHttpClient(l)
+	defaultClient := jwt.getHttpClient()
 	hc := &http.Client{
 		Timeout: defaultClient.Timeout,
 		Transport: &oauth2.Transport{
@@ -207,7 +207,7 @@ func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) 
 }
 
 // Creates an http client for REST requests, with test hook possibility
-func (jwt *gcpAuthJwt) getHttpClient(l lane.Lane) *http.Client {
+func (jwt *gcpAuthJwt) getHttpClient() *http.Client {
 	// allow test hook
 	if jwt.cfg.testClient != nil {
 		return jwt.cfg.testClient
