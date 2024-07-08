@@ -71,7 +71,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 		return
 	}
 
-	// deriive an http client that has the gsa token source
+	// derive an http client that has the gsa token source
 	defaultClient := jwt.getHttpClient(l)
 	hc := &http.Client{
 		Timeout: defaultClient.Timeout,
