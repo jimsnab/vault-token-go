@@ -1,6 +1,8 @@
 package vaulttoken
 
 import (
+	"os"
+
 	vaultapi "github.com/hashicorp/vault/api"
 	"github.com/jimsnab/go-lane"
 )
@@ -34,7 +36,12 @@ func NewVaultClient(l lane.Lane, uri, caCert, caPath, vaultToken, vaultRole stri
 		CACert: caCert, // server ca pem file path
 		CAPath: caPath, // server ca pem(s) dir path
 	}
-	vcfg.ConfigureTLS(&tlsConfig)
+	terr := vcfg.ConfigureTLS(&tlsConfig)
+	if terr != nil {
+		l.Warnf("vault client: tls configuration error: %v", terr)
+		wd, _ := os.Getwd()
+		l.Debugf("vault client: working dir: %s", wd)
+	}
 
 	var vc *vaultapi.Client
 	if vc, err = vaultapi.NewClient(vcfg); err != nil {

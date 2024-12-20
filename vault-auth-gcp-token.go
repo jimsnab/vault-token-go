@@ -6,7 +6,6 @@ import (
 
 	vaultapi "github.com/hashicorp/vault/api"
 	"github.com/jimsnab/go-lane"
-	"github.com/pkg/errors"
 )
 
 type (
@@ -34,7 +33,7 @@ func (gat *gcpAuthToken) getToken(l lane.Lane) (token *vaultapi.Secret, err erro
 
 		var signedJwt string
 		if signedJwt, err = jwt.createSignedJwtWithRetry(l, 5); err != nil {
-			err = errors.Wrap(err, "can't get signed jwt token for auth")
+			l.Errorf("can't get signed jwt token for auth: %v", err)
 			return
 		}
 
@@ -48,13 +47,13 @@ func (gat *gcpAuthToken) getToken(l lane.Lane) (token *vaultapi.Secret, err erro
 
 		var resp *vaultapi.Secret
 		if resp, err = gat.client.Logical().Write(gat.cfg.authPath+"/login", jsonData); err != nil {
-			err = errors.Wrap(err, "vault login request error")
+			l.Errorf("vault login request error: %v", err)
 			return
 		}
 
 		var tokenTtl time.Duration
 		if tokenTtl, err = resp.TokenTTL(); err != nil {
-			err = errors.Wrap(err, "vault token ttl error")
+			l.Errorf("vault token ttl error: %v", err)
 			return
 		}
 
@@ -85,7 +84,7 @@ func (gat *gcpAuthToken) isRevoked(l lane.Lane) (revoked bool, err error) {
 	} else {
 		var client *vaultapi.Client
 		if client, err = gat.client.Clone(); err != nil {
-			err = errors.Wrap(err, "can't clone vault api client to check revocation")
+			l.Errorf("can't clone vault api client to check revocation", err)
 			return
 		}
 		client.SetToken(gat.token.Auth.ClientToken)
@@ -107,13 +106,13 @@ func (gat *gcpAuthToken) refresh(l lane.Lane, nextTtlInSeconds int) (err error) 
 
 	var token *vaultapi.Secret
 	if token, err = gat.client.Auth().Token().RenewSelfWithContext(l, nextTtlInSeconds); err != nil {
-		err = errors.Wrap(err, "can't refresh vault api token")
+		l.Errorf("can't refresh vault api token: %v", err)
 		return
 	}
 
 	var tokenTtl time.Duration
 	if tokenTtl, err = token.TokenTTL(); err != nil {
-		err = errors.Wrap(err, "vault token refresh ttl error")
+		l.Errorf("vault token refresh ttl error: %v", err)
 		return
 	}
 
@@ -126,7 +125,7 @@ func (gat *gcpAuthToken) refresh(l lane.Lane, nextTtlInSeconds int) (err error) 
 func (gat *gcpAuthToken) revoke(l lane.Lane) (err error) {
 	if gat.token != nil {
 		if err = gat.client.Auth().Token().RevokeSelfWithContext(l, ""); err != nil {
-			err = errors.Wrap(err, "revoke vault token error")
+			l.Errorf("revoke vault token error: %v", err)
 			return
 		}
 

@@ -52,7 +52,7 @@ func (jwt *gcpAuthJwt) createSignedJwtWithRetry(l lane.Lane, maxRetries int) (si
 	}, backoff.WithMaxRetries(b, uint64(maxRetries)))
 
 	if err != nil {
-		err = errors.Wrapf(err, "unable to sign JWT after %d retries", maxRetries)
+		l.Errorf("unable to sign JWT after %d retries: %v", maxRetries, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	var saEmail string
 	var tokenSrc oauth2.TokenSource
 	if saEmail, tokenSrc, err = jwt.getSaInfo(l); err != nil {
-		err = errors.Wrap(err, "unable to get service account from environment")
+		l.Errorf("unable to get service account from environment: %v", err)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 		"exp": time.Now().UTC().Add(kJwtTokenTimeoutMins * time.Minute).Unix(),
 	})
 	if err != nil {
-		err = errors.Wrap(err, "inner jwt marshalling error")
+		l.Errorf("inner jwt marshalling error: %v", err)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	// escape the claim json per https://cloud.google.com/iam/docs/reference/credentials/rest/v1/projects.serviceAccounts/signJwt
 	var payload []byte
 	if payload, err = json.Marshal(string(claim)); err != nil {
-		err = errors.Wrap(err, "outer jwt marshalling error")
+		l.Errorf("outer jwt marshalling error: %v", err)
 		return
 	}
 
@@ -110,33 +110,36 @@ func (jwt *gcpAuthJwt) createSignedJwt(l lane.Lane) (signedJwt string, err error
 	var resp *http.Response
 	resp, err = hc.Post(url, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		err = errors.Wrap(err, "error posting to gcp oauth2")
+		l.Errorf("error posting to gcp oauth2: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	var body []byte
 	if body, err = io.ReadAll(resp.Body); err != nil {
-		err = errors.Wrap(err, "error receiving gcp oauth2 response")
+		l.Errorf("error receiving gcp oauth2 response: %v", err)
 		return
 	}
 
 	var data map[string]any
 	if err = json.Unmarshal(body, &data); err != nil {
-		err = errors.Wrap(err, "error parsing gcp oauth2 response")
+		l.Errorf("error parsing gcp oauth2 response: %v", err)
+		l.Infof("body: %s", string(body))
 		return
 	}
 
 	jwtErr, exists := data["error"]
 	if exists {
 		m := jwtErr.(map[string]any)
-		err = fmt.Errorf("error requesting jwt signing %d %s %s", int(m["code"].(float64)), m["status"].(string), m["message"].(string))
+		l.Errorf("error requesting jwt signing %d %s %s", int(m["code"].(float64)), m["status"].(string), m["message"].(string))
+		err = errors.New(m["message"].(string))
 		return
 	}
 
 	signedJwt, exists = data["signedJwt"].(string)
 	if !exists {
-		err = fmt.Errorf("unexpected jwt signing response: %s", string(body))
+		l.Errorf("unexpected jwt signing response: %s", string(body))
+		err = errors.New("unexpected jwt signing response")
 		return
 	}
 	return
@@ -151,12 +154,12 @@ func (jwt *gcpAuthJwt) getSaInfo(l lane.Lane) (saEmail string, tokenSrc oauth2.T
 
 	var creds *google.Credentials
 	if creds, err = google.FindDefaultCredentials(l, kGcpAuthUrl); err != nil {
-		err = errors.Wrap(err, "unable to find default google credentials for service account")
+		l.Errorf("unable to find default google credentials for service account: %v", err)
 		return
 	}
 
 	if saEmail, err = jwt.parseCredentials(l, creds); err != nil {
-		err = errors.Wrap(err, "unable to get client e-mail from default google credentials")
+		l.Errorf("unable to get client e-mail from default google credentials: %v", err)
 		return
 	}
 
@@ -172,9 +175,9 @@ func (jwt *gcpAuthJwt) getSaInfo(l lane.Lane) (saEmail string, tokenSrc oauth2.T
 
 // see https://cloud.google.com/compute/docs/metadata/overview
 func (jwt *gcpAuthJwt) getDefaultSaEmail(l lane.Lane) (saEmail string, err error) {
-	saEmail, err = metadata.Email("")
+	saEmail, err = metadata.EmailWithContext(l, "")
 	if err != nil {
-		l.Tracef("vault-auth-gcp: can't get default sa email: %v", err)
+		l.Errorf("vault-auth-gcp: can't get default sa email: %v", err)
 		return
 	}
 
@@ -191,7 +194,8 @@ func (jwt *gcpAuthJwt) parseCredentials(l lane.Lane, creds *google.Credentials) 
 	if len(creds.JSON) > 0 {
 		var data map[string]string
 		if err = json.Unmarshal(creds.JSON, &data); err != nil {
-			err = errors.Wrap(err, "unable to parse credentials")
+			l.Errorf("unable to parse credentials: %v", err)
+			l.Info("credentials: %s", string(creds.JSON))
 			return
 		}
 
